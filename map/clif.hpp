@@ -791,9 +791,18 @@ void clif_guild_xy_remove(struct map_session_data *sd);
 void clif_bg_hp(struct map_session_data *sd);
 void clif_bg_xy(struct map_session_data *sd);
 void clif_bg_xy_remove(struct map_session_data *sd);
+void clif_bg_belonginfo(struct map_session_data *sd);
+int clif_visual_guild_id(struct block_list *bl);
+int clif_visual_emblem_id(struct block_list *bl);
+void clif_bg_emblem(struct map_session_data *sd, struct guild *g);
+void clif_bg_memberlist(struct map_session_data *sd);
+void clif_bg_leave(struct map_session_data *sd, const char *name, const char *mes);
+void clif_bg_leave_single(struct map_session_data *sd, const char *name, const char *mes);
 void clif_bg_message(struct battleground_data *bg, int src_id, const char *name, const char *mes, int len);
+void clif_bg_expulsion_single(struct map_session_data *sd, const char *name, const char *mes);
 void clif_bg_updatescore(int16 m);
 void clif_bg_updatescore_single(struct map_session_data *sd);
+void clif_bg_updatescore_team(struct battleground_data *bg);
 void clif_sendbgemblem_area(struct map_session_data *sd);
 void clif_sendbgemblem_single(int fd, struct map_session_data *sd);
 

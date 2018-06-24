@@ -319,6 +319,7 @@ int guild_payexp_timer(int tid, unsigned int tick, int id, intptr_t data) {
  * @see DBApply
  */
 int guild_send_xy_timer_sub(DBKey key, DBData *data, va_list ap) {
+
 	struct guild *g = (struct guild *)db_data2ptr(data);
 	int i;
 
@@ -1845,7 +1846,7 @@ int guild_gm_changed(int guild_id, uint32 account_id, uint32 char_id, time_t tim
 
 	// announce the change to all guild members
 	for( i = 0; i < g->max_member; i++ ) {
-		if( g->member[i].sd && g->member[i].sd->fd ) {
+		if( g->member[i].sd && g->member[i].sd->fd && !(g->member[i].sd->bg_id)) {
 			clif_guild_basicinfo(g->member[i].sd);
 			clif_guild_memberlist(g->member[i].sd);
 			clif_guild_belonginfo(g->member[i].sd); // Update clientside guildmaster flag
