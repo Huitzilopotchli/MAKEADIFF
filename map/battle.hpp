@@ -512,6 +512,17 @@ struct Battle_Config
 	int bg_magic_damage_rate;
 	int bg_misc_damage_rate;
 	int bg_flee_penalty;
+	int bg_enabled;
+	int bg_from_town_only;
+	int bg_ip_check;
+	int bg_idle_announce;
+	int bg_idle_autokick;
+	int bg_reportafk_leaderonly;
+	int bg_balanced_queue;
+	int bg_reward_rates;
+	int bg_xy_interval;
+	int bg_ranked_mode;
+	int bg_leader_change;
 
 	// rAthena
 	int max_third_parameter;

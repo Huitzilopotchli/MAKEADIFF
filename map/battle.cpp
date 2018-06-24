@@ -5133,11 +5133,11 @@ struct Damage battle_calc_weapon_final_atk_modifiers(struct Damage wd, struct bl
 		if (sc->data[SC_FUSION]) {
 			int hp= sstatus->max_hp;
 			if (sd && tsd) {
-				hp = 8*hp/100;
-				if (((int64)sstatus->hp * 100) <= ((int64)sstatus->max_hp * 20))
-					hp = sstatus->hp;
-			} else
-				hp = 2*hp/100; //2% hp loss per hit
+				hp = 1*hp/100;
+				/*if (((int64)sstatus->hp * 100) <= ((int64)sstatus->max_hp * 20))
+					hp = sstatus->hp;*/
+			} /*else
+				hp = 2*hp/100; //2% hp loss per hit*/
 			status_zap(src, hp, 0);
 		}
 		// Only affecting non-skills
@@ -5348,6 +5348,7 @@ static struct Damage battle_calc_weapon_attack(struct block_list *src, struct bl
 	struct status_data *tstatus = status_get_status_data(target);
 	int right_element, left_element;
 	bool infdef = false;
+	
 
 	memset(&wd,0,sizeof(wd));
 
@@ -5370,10 +5371,12 @@ static struct Damage battle_calc_weapon_attack(struct block_list *src, struct bl
 	tsd = BL_CAST(BL_PC, target);
 
 	//Check for Lucky Dodge
-	if ((!skill_id || skill_id == PA_SACRIFICE) && tstatus->flee2 && rnd()%1000 < tstatus->flee2) {
+	if (sd)
+		tstatus->flee2 = tstatus->flee2 - sd->bonus.perfect_hit*10;
+	if ((!skill_id || skill_id == PA_SACRIFICE) && tstatus->flee2 && rnd() % 1000 < tstatus->flee2) {
 		wd.type = DMG_LUCY_DODGE;
 		wd.dmg_lv = ATK_LUCKY;
-		if(wd.div_ < 0)
+		if (wd.div_ < 0)
 			wd.div_ *= -1;
 		return wd;
 	}
@@ -7640,6 +7643,9 @@ int battle_check_target( struct block_list *src, struct block_list *target,int f
 	ud = unit_bl2ud(target);
 	m = target->m;
 
+	if (flag&BCT_ENEMY && (map_getcell(m, src->x, src->y, CELL_CHKBASILICA) || map_getcell(m, target->x, target->y, CELL_CHKBASILICA)))
+		return -1;
+
 	//t_bl/s_bl hold the 'master' of the attack, while src/target are the actual
 	//objects involved.
 	if( (t_bl = battle_get_master(target)) == NULL )
@@ -7679,7 +7685,7 @@ int battle_check_target( struct block_list *src, struct block_list *target,int f
 		{
 			struct mob_data *md = ((TBL_MOB*)target);
 
-			if (ud && ud->immune_attack)
+			if ((ud && ud->immune_attack) || (md != NULL && md->state.inmunity))
 				return 0;
 			if(((md->special_state.ai == AI_SPHERE || //Marine Spheres
 				(md->special_state.ai == AI_FLORA && battle_config.summon_flora&1)) && s_bl->type == BL_PC && src->type != BL_MOB) || //Floras
@@ -7903,7 +7909,10 @@ int battle_check_target( struct block_list *src, struct block_list *target,int f
 		if( flag&(BCT_PARTY|BCT_ENEMY) )
 		{
 			int s_party = status_get_party_id(s_bl);
-			if( s_party && s_party == status_get_party_id(t_bl) && !(map[m].flag.pvp && map[m].flag.pvp_noparty) && !(map_flag_gvg(m) && map[m].flag.gvg_noparty) && (!map[m].flag.battleground || sbg_id == tbg_id) )
+			//if( s_party && s_party == status_get_party_id(t_bl) && !(map[m].flag.pvp && map[m].flag.pvp_noparty) && !(map_flag_gvg(m) && map[m].flag.gvg_noparty) && (!map[m].flag.battleground || sbg_id == tbg_id) )
+			if (map[m].flag.battleground && sbg_id && sbg_id == tbg_id)
+				state |= BCT_PARTY; // On Battleground, same team works like Party
+			else if (!map[m].flag.battleground && s_party && s_party == status_get_party_id(t_bl) && !(map[m].flag.pvp && map[m].flag.pvp_noparty) && !(map_flag_gvg(m) && map[m].flag.gvg_noparty))
 				state |= BCT_PARTY;
 			else
 				state |= BCT_ENEMY;
@@ -7912,7 +7921,10 @@ int battle_check_target( struct block_list *src, struct block_list *target,int f
 		{
 			int s_guild = status_get_guild_id(s_bl);
 			int t_guild = status_get_guild_id(t_bl);
-			if( !(map[m].flag.pvp && map[m].flag.pvp_noguild) && s_guild && t_guild && (s_guild == t_guild || (!(flag&BCT_SAMEGUILD) && guild_isallied(s_guild, t_guild))) && (!map[m].flag.battleground || sbg_id == tbg_id) )
+			//if( !(map[m].flag.pvp && map[m].flag.pvp_noguild) && s_guild && t_guild && (s_guild == t_guild || (!(flag&BCT_SAMEGUILD) && guild_isallied(s_guild, t_guild))) && (!map[m].flag.battleground || sbg_id == tbg_id) )
+			if (map[m].flag.battleground && sbg_id && sbg_id == tbg_id)
+				state |= BCT_GUILD; // On Battleground, same team works like Guild
+			else if (!(map[m].flag.pvp && map[m].flag.pvp_noguild) && s_guild && t_guild && (s_guild == t_guild || (!(flag&BCT_SAMEGUILD) && guild_isallied(s_guild, t_guild) /*&& !map[m].flag.gvg_noalliance*/)) && !map[m].flag.battleground)
 				state |= BCT_GUILD;
 			else
 				state |= BCT_ENEMY;
@@ -8385,6 +8397,21 @@ static const struct _battle_data {
 	{ "bg_magic_attack_damage_rate",        &battle_config.bg_magic_damage_rate,            60,     0,      INT_MAX,        },
 	{ "bg_misc_attack_damage_rate",         &battle_config.bg_misc_damage_rate,             60,     0,      INT_MAX,        },
 	{ "bg_flee_penalty",                    &battle_config.bg_flee_penalty,                 20,     0,      INT_MAX,        },
+/**
+ * eAmod BG
+**/	{ "bg_enabled",							&battle_config.bg_enabled,						1,		 0,		1,				},
+	{ "bg_from_town_only",					&battle_config.bg_from_town_only,				1,		 0,		1,				},
+	{ "bg_ip_check",						&battle_config.bg_ip_check,						1,		 0,		1,				},
+	{ "bg_idle_announce",					&battle_config.bg_idle_announce,				0,		 0,		INT_MAX,		},
+	{ "bg_idle_autokick",					&battle_config.bg_idle_autokick,				0,		 0,		INT_MAX,		},
+	{ "bg_reportafk_leaderonly",			&battle_config.bg_reportafk_leaderonly,			1,		 0,		1,				},
+	{ "bg_balanced_queue",					&battle_config.bg_balanced_queue,				1,		 0,		1,				},
+	{ "bg_reward_rates",					&battle_config.bg_reward_rates,					100,	 0,		INT_MAX,		},
+	{ "bg_xy_interval",						&battle_config.bg_xy_interval,					1000,   100,    INT_MAX,		},
+	{ "bg_ranked_mode",						&battle_config.bg_ranked_mode,					1,		 0,		1,				},
+	{ "bg_leader_change",					&battle_config.bg_leader_change,				1,		 0,		1,				},
+
+
 // rAthena
 	{ "max_third_parameter",				&battle_config.max_third_parameter,				135,	10,		SHRT_MAX,		},
 	{ "max_baby_third_parameter",			&battle_config.max_baby_third_parameter,		108,	10,		SHRT_MAX,		},
@@ -8497,7 +8524,7 @@ static const struct _battle_data {
 	{ "change_party_leader_samemap",        &battle_config.change_party_leader_samemap,     1,      0,      1,              },
 	{ "dispel_song",                        &battle_config.dispel_song,                     0,      0,      1,              },
 	{ "guild_maprespawn_clones",			&battle_config.guild_maprespawn_clones,			0,		0,		1,				},
-	{ "hide_fav_sell", 			&battle_config.hide_fav_sell,			0,      0,      1,              },
+	{ "hide_fav_sell", 						&battle_config.hide_fav_sell,			0,      0,      1,              },
 	{ "mail_daily_count",					&battle_config.mail_daily_count,				100,	0,		INT32_MAX,		},
 	{ "mail_zeny_fee",						&battle_config.mail_zeny_fee,					2,		0,		100,			},
 	{ "mail_attachment_price",				&battle_config.mail_attachment_price,			2500,	0,		INT32_MAX,		},

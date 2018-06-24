@@ -626,6 +626,7 @@
 	export_constant2("bNoMagicDamage",SP_NO_MAGIC_DAMAGE);
 	export_constant2("bNoWeaponDamage",SP_NO_WEAPON_DAMAGE);
 	export_constant2("bNoGemStone",SP_NO_GEMSTONE);
+	export_constant2("bNoConsumme", SP_NO_CONSUMME);
 	export_constant2("bNoCastCancel2",SP_NO_CASTCANCEL2);
 	export_constant2("bNoMiscDamage",SP_NO_MISC_DAMAGE);
 	export_constant2("bUnbreakableWeapon",SP_UNBREAKABLE_WEAPON);
@@ -4909,6 +4910,11 @@
 	export_constant(USW_MOVE_FULL_CELL);
 	export_constant(USW_FORCE_STOP);
 	export_constant(USW_ALL);
+
+	script_set_constant("BLOCK_ATTACK", PCBLOCK_ATTACK, false, false);
+	script_set_constant("BLOCK_USEITEM", PCBLOCK_USEITEM, false, false);
+	script_set_constant("BLOCK_CHAT", PCBLOCK_CHAT, false, false);
+	script_set_constant("BLOCK_SITSTAND", PCBLOCK_SITSTAND, false, false);
 
 	/* achievement groups */
 	export_constant2("AG_ADD_FRIEND", AG_ADD_FRIEND);

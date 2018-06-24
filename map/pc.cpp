@@ -159,6 +159,27 @@ int pc_get_group_id(struct map_session_data *sd) {
 	return sd->group_id;
 }
 
+/***********************************************************
+* Update Idle PC Timer
+***********************************************************/
+int pc_update_last_action(struct map_session_data *sd)
+{
+	struct battleground_data *bg;
+	unsigned int tick = gettick();
+
+	sd->idletime = last_tick;
+
+	if (sd->bg_id && sd->state.bg_afk && (bg = bg_team_search(sd->bg_id)) != NULL && bg->g)
+	{ // Battleground AFK announce
+		char output[128];
+		sprintf(output, "%s : %s is no longer away...", bg->g->name, sd->status.name);
+		clif_bg_message(bg, bg->bg_id, bg->g->name, output, strlen(output) + 1);
+		sd->state.bg_afk = 0;
+	}
+
+	return 1;
+}
+
 /** Get player's group Level
 * @param sd
 * @return Group Level
@@ -1540,6 +1561,14 @@ void pc_reg_received(struct map_session_data *sd)
 		intif_request_achievements(sd->status.char_id);
 	}
 
+	if (battle_config.bg_reward_rates != 100)
+	{
+		char output[128];
+		int erate = battle_config.bg_reward_rates - 100;
+		sprintf(output, "Battleground Happy Hour. Rates at + %d %%", erate);
+		clif_displaymessage(sd->fd, output);
+	}
+
 	if (sd->state.connect_new == 0 && sd->fd) { //Character already loaded map! Gotta trigger LoadEndAck manually.
 		sd->state.connect_new = 1;
 		clif_parse_LoadEndAck(sd->fd, sd);
@@ -2628,8 +2657,11 @@ void pc_bonus(struct map_session_data *sd,int type,int val)
 			break;
 		case SP_FLEE2:
 			if(sd->state.lr_flag != 2) {
-				bonus = status->flee2 + val*10;
-				status->flee2 = cap_value(bonus, SHRT_MIN, SHRT_MAX);
+				if (((sd->class_&MAPID_BASEMASK) == MAPID_MAGE) || ((sd->class_&MAPID_UPPERMASK) == MAPID_BARDDANCER) | ((sd->class_&MAPID_UPPERMASK) == MAPID_PRIEST))
+				{
+					bonus = status->flee2 + val * 10;
+					status->flee2 = cap_value(bonus, SHRT_MIN, SHRT_MAX);
+				}
 			}
 			break;
 		case SP_CRITICAL:
@@ -3146,6 +3178,10 @@ void pc_bonus(struct map_session_data *sd,int type,int val)
 		case SP_NO_MADO_FUEL:
 			if (sd->state.lr_flag != 2)
 				sd->special_state.no_mado_fuel = 1;
+			break;
+		case SP_NO_CONSUMME:
+			if (sd->state.lr_flag != 2 && sd->special_state.no_consumme != 2)
+				sd->special_state.no_consumme = 1;
 			break;
 		default:
 			if (running_npc_stat_calc_event) {
@@ -4960,7 +4996,7 @@ bool pc_isUseitem(struct map_session_data *sd,int n)
 		(item->class_base[sd->class_&JOBL_2_1?1:(sd->class_&JOBL_2_2?2:0)])
 	))
 		return false;
-	
+
 	if (sd->sc.count && (
 		sd->sc.data[SC_BERSERK] || sd->sc.data[SC_SATURDAYNIGHTFEVER] ||
 		(sd->sc.data[SC_GRAVITATION] && sd->sc.data[SC_GRAVITATION]->val3 == BCT_SELF) ||
@@ -5015,6 +5051,7 @@ int pc_useitem(struct map_session_data *sd,int n)
 			return 0;
 		}
 #else
+
 		if (!sd->npc_item_flag)
 			return 0;
 #endif
@@ -5023,6 +5060,12 @@ int pc_useitem(struct map_session_data *sd,int n)
 	id = sd->inventory_data[n];
 
 	if (item.nameid == 0 || item.amount <= 0)
+		return 0;
+
+	if (sd->state.only_walk)
+		return 0;
+
+	if (sd->state.blockeduseitem) // *pcblock script command
 		return 0;
 
 	if( !pc_isUseitem(sd,n) )
@@ -5482,6 +5525,7 @@ enum e_setpos pc_setpos(struct map_session_data* sd, unsigned short mapindex, in
 		}
 
 		sd->state.pmap = sd->bl.m;
+		sd->state.only_walk = 0;
 		if (sd->sc.count) { // Cancel some map related stuff.
 			if (sd->sc.data[SC_JAILED])
 				return SETPOS_MAPINDEX; //You may not get out!
@@ -5511,6 +5555,8 @@ enum e_setpos pc_setpos(struct map_session_data* sd, unsigned short mapindex, in
 		party_send_dot_remove(sd); //minimap dot fix [Kevin]
 		guild_send_dot_remove(sd);
 		bg_send_dot_remove(sd);
+		if (battle_config.bg_from_town_only && sd->qd && map[sd->bl.m].flag.town && !map[m].flag.town)
+			queue_leaveall(sd);
 		if (sd->regen.state.gc)
 			sd->regen.state.gc = 0;
 		// make sure vending is allowed here
@@ -8110,6 +8156,7 @@ int pc_readparam(struct map_session_data* sd,int type)
 		case SP_NO_WEAPON_DAMAGE:val = sd->special_state.no_weapon_damage; break;
 		case SP_NO_MISC_DAMAGE:  val = sd->special_state.no_misc_damage; break;
 		case SP_NO_GEMSTONE:     val = sd->special_state.no_gemstone?1:0; break;
+		case SP_NO_CONSUMME:	 val = sd->special_state.no_consumme?1:0; break;
 		case SP_INTRAVISION:     val = sd->special_state.intravision?1:0; break;
 		case SP_NO_KNOCKBACK:    val = sd->special_state.no_knockback?1:0; break;
 		case SP_SPLASH_RANGE:    val = sd->bonus.splash_range; break;
@@ -9037,7 +9084,7 @@ bool pc_candrop(struct map_session_data *sd, struct item *item)
 bool pc_can_attack( struct map_session_data *sd, int target_id ) {
 	nullpo_retr(false, sd);
 
-	if( pc_is90overweight(sd) || pc_isridingwug(sd) )
+	if( pc_is90overweight(sd) || pc_isridingwug(sd) || sd->state.blockedattack)
 		return false;
 
 	if( sd->sc.data[SC_BASILICA] ||
@@ -9051,7 +9098,7 @@ bool pc_can_attack( struct map_session_data *sd, int target_id ) {
 		sd->sc.data[SC_BLADESTOP] ||
 		sd->sc.data[SC_DEEPSLEEP] ||
 		(sd->sc.data[SC_GRAVITATION] && sd->sc.data[SC_GRAVITATION]->val3 == BCT_SELF) ||
-		sd->sc.data[SC_KINGS_GRACE] )
+		sd->sc.data[SC_KINGS_GRACE])
 			return false;
 
 	return true;

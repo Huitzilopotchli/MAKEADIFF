@@ -964,6 +964,7 @@ int party_skill_check(struct map_session_data *sd, int party_id, uint16 skill_id
 
 	if(!party_id || (p = party_search(party_id)) == NULL)
 		return 0;
+
 	party_check_state(p);
 	switch(skill_id) {
 		case TK_COUNTER: //Increase Triple Attack rate of Monks.
@@ -980,7 +981,7 @@ int party_skill_check(struct map_session_data *sd, int party_id, uint16 skill_id
 			return 0; //Unknown case?
 	}
 
-	for(i = 0; i < MAX_PARTY; i++) {
+	for(i = 0; i < MAX_BG_MEMBERS; i++) {
 		if ((p_sd = p->data[i].sd) == NULL)
 			continue;
 
@@ -1251,16 +1252,20 @@ int party_sub_count_class(struct block_list *bl, va_list ap)
 /// Executes 'func' for each party member on the same map and in range (0:whole map)
 int party_foreachsamemap(int (*func)(struct block_list*,va_list),struct map_session_data *sd,int range,...)
 {
-	struct party_data *p;
+	struct party_data *p = NULL;
+	struct battleground_data *bg = NULL;
+	struct map_session_data *psd;
 	int i;
 	int x0,y0,x1,y1;
-	struct block_list *list[MAX_PARTY];
+	struct block_list *list[MAX_BG_MEMBERS];
 	int blockcount=0;
 	int total = 0; //Return value.
 
 	nullpo_ret(sd);
 
-	if((p = party_search(sd->status.party_id)) == NULL)
+	if (map[sd->bl.m].flag.battleground && (bg = bg_team_search(sd->bg_id)) == NULL)
+		return 0;
+	else if( !map[sd->bl.m].flag.battleground && (p = party_search(sd->status.party_id)) == NULL)
 		return 0;
 
 	x0 = sd->bl.x-range;
@@ -1268,22 +1273,40 @@ int party_foreachsamemap(int (*func)(struct block_list*,va_list),struct map_sess
 	x1 = sd->bl.x+range;
 	y1 = sd->bl.y+range;
 
-	for(i = 0; i < MAX_PARTY; i++) {
-		struct map_session_data *psd = p->data[i].sd;
 
-		if(!psd)
-			continue;
+	if (bg) {
 
-		if(psd->bl.m!=sd->bl.m || !psd->bl.prev)
-			continue;
-
-		if(range &&
-			(psd->bl.x<x0 || psd->bl.y<y0 ||
-			 psd->bl.x>x1 || psd->bl.y>y1 ) )
-			continue;
-
-		list[blockcount++]=&psd->bl;
+		for (i = 0; i < MAX_BG_MEMBERS; i++)
+		{
+			if ((psd = bg->members[i].sd) == NULL)
+				continue;
+			if (psd->bl.m != sd->bl.m || !psd->bl.prev)
+				continue;
+			if (range && (psd->bl.x < x0 || psd->bl.y < y0 || psd->bl.x > x1 || psd->bl.y > y1))
+				continue;
+			list[blockcount++] = &psd->bl;
+		}
 	}
+	else if (p)
+	{
+		for (i = 0; i < MAX_PARTY; i++) {
+			struct map_session_data *psd = p->data[i].sd;
+
+			if (!psd)
+				continue;
+
+			if (psd->bl.m != sd->bl.m || !psd->bl.prev)
+				continue;
+
+			if (range &&
+				(psd->bl.x<x0 || psd->bl.y<y0 ||
+					psd->bl.x>x1 || psd->bl.y>y1))
+				continue;
+
+			list[blockcount++] = &psd->bl;
+		}
+	}
+	else return 0;
 
 	map_freeblock_lock();
 

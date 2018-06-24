@@ -1895,6 +1895,14 @@ enum e_hat_effects {
 	HAT_EF_MAX
 };
 
+enum pc_block_action {
+	PCBLOCK_ATTACK = 0x1,
+	PCBLOCK_USEITEM = 0x2,
+	PCBLOCK_CHAT = 0x4,
+	PCBLOCK_SITSTAND = 0x8,
+};
+
+
 /**
  * used to generate quick script_array entries
  **/

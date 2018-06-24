@@ -14,6 +14,7 @@
 #include "searchstore.hpp"  // struct s_search_store_info
 #include "vending.hpp" // struct s_vending
 #include "buyingstore.hpp" // struct s_buyingstore
+#include "battleground.hpp" // battleground_queue
 #include "unit.hpp" // unit_data
 #include "status.hpp" // unit_data
 #include "script.hpp" // struct script_reg, struct script_regstr
@@ -266,6 +267,13 @@ struct map_session_data {
 		bool keepshop; // Whether shop data should be removed when the player disconnects
 		bool mail_writing; // Whether the player is currently writing a mail in RODEX or not
 		bool cashshop_open;
+		//Eamod BG
+		unsigned int only_walk : 1; // [Zephyrus] Block Skills and Item usage to a player
+		unsigned bg_afk : 1; // Moved here to reduce searchs
+		unsigned int blockedattack : 1;
+		unsigned int blockeduseitem : 1;
+		unsigned int blockedchat : 1;
+		unsigned int blockedsitstand : 1;
 	} state;
 	struct {
 		unsigned char no_weapon_damage, no_magic_damage, no_misc_damage;
@@ -279,6 +287,7 @@ struct map_session_data {
 		unsigned int no_knockback : 1;
 		unsigned int bonus_coma : 1;
 		unsigned int no_mado_fuel : 1; // Disable Magic_Gear_Fuel consumption [Secret]
+		unsigned int no_consumme : 2;
 	} special_state;
 	uint32 login_id1, login_id2;
 	unsigned short class_;	//This is the internal job ID used by the map server to simplify comparisons/queries/etc. [Skotlex]
@@ -623,7 +632,12 @@ struct map_session_data {
 	int debug_line;
 	const char* debug_func;
 
+//	unsigned int bg_id;
+// BG eamod
 	unsigned int bg_id;
+	struct battleground_data *bmaster_flag;
+	unsigned short bg_kills; // Battleground Kill Count
+	struct queue_data *qd;
 
 #ifdef SECURE_NPCTIMEOUT
 	/**
@@ -1265,6 +1279,8 @@ extern int day_timer_tid;
 extern int night_timer_tid;
 int map_day_timer(int tid, unsigned int tick, int id, intptr_t data); // by [yor]
 int map_night_timer(int tid, unsigned int tick, int id, intptr_t data); // by [yor]
+
+int pc_update_last_action(struct map_session_data *sd);
 
 // Rental System
 void pc_inventory_rentals(struct map_session_data *sd);

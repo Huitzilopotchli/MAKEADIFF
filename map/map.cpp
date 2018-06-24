@@ -1797,6 +1797,36 @@ int map_addflooritem(struct item *item, int amount, int16 m, int16 x, int16 y, i
 	return fitem->bl.id;
 }
 
+int map_addflooritem_area(struct block_list* bl, int m, int x, int y, int nameid, int amount)
+{
+	struct item item_tmp;
+	int count, range, i;
+	short mx, my;
+
+	memset(&item_tmp, 0, sizeof(item_tmp));
+	item_tmp.nameid = nameid;
+	item_tmp.identify = 1;
+
+	if (bl != NULL) m = bl->m;
+
+	count = 0;
+	range = (int)sqrt(amount) + 2;
+	for (i = 0; i < amount; i++)
+	{
+		if (bl != NULL)
+			map_search_freecell(bl, 0, &mx, &my, range, range, 0);
+		else
+		{
+			mx = x; my = y;
+			map_search_freecell(NULL, m, &mx, &my, range, range, 1);
+		}
+
+		count += (map_addflooritem(&item_tmp, 1, m, mx, my, 0, 0, 0, 4, 0) != 0) ? 1 : 0;
+	}
+
+	return count;
+}
+
 /**
  * @see DBCreateData
  */

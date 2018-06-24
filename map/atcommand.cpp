@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <math.h>
 
+
 #include "../common/cbasetypes.h"
 #include "../common/mmo.h"
 #include "../common/timer.h"
@@ -21,6 +22,7 @@
 
 #include "map.hpp"
 #include "battle.hpp"
+#include "battleground.hpp"
 #include "chat.hpp"
 #include "channel.hpp"
 #include "chrif.hpp"
@@ -9859,6 +9861,54 @@ ACMD_FUNC(cloneequip) {
 	return 0;
 }
 
+/*=========================================
+* Check values of resistance to elements
+* [ Keitenai ]
+*-----------------------------------------*/
+ACMD_FUNC(resistance) {
+	char output[CHAT_SIZE_MAX];
+	int i;
+	struct {
+		const char* format;
+		int value;
+		
+	} output_table[] = {
+			{ "   [ %d %] Neutral", 0 },
+			{ "   [ %d %] Wate resist", 0 },
+			{ "   [ %d %] Earth", 0 },
+			{ "   [ %d %] Fire", 0 },
+			{ "   [ %d %] Wind", 0 },
+			{ "   [ %d %] Poison", 0 },
+			{ "   [ %d %] Holy", 0 },
+			{ "   [ %d %] Dark", 0 },
+			{ "   [ %d %] Ghost", 0 },
+			{ "   [ %d %] Long Range", 0 },
+			{ "   [ %d %] Demi-Humain", 0 },
+			{ "   [ %d %] Medium Size", 0 },
+			{ NULL, 0 }
+		};
+		memset(output, '\0', sizeof(output));
+		clif_displaymessage(sd->fd, "========= Resistance Values =========");
+		output_table[0].value = (sd->subele[ELE_NEUTRAL] + sd->subele_script[ELE_NEUTRAL]);
+		output_table[1].value = (sd->subele[ELE_WATER] + sd->subele_script[ELE_WATER]);
+		output_table[2].value = (sd->subele[ELE_EARTH] + sd->subele_script[ELE_EARTH]);
+		output_table[3].value = (sd->subele[ELE_FIRE] + sd->subele_script[ELE_FIRE]);
+		output_table[4].value = (sd->subele[ELE_WIND] + sd->subele_script[ELE_WIND]);
+		output_table[5].value = (sd->subele[ELE_POISON] + sd->subele_script[ELE_POISON]);
+		output_table[6].value = (sd->subele[ELE_HOLY] + sd->subele_script[ELE_HOLY]);
+		output_table[7].value = (sd->subele[ELE_DARK] + sd->subele_script[ELE_DARK]);
+		output_table[8].value = (sd->subele[ELE_GHOST] + sd->subele_script[ELE_GHOST]);
+		output_table[9].value = (sd->bonus.long_attack_def_rate);
+		output_table[10].value = (sd->subrace[RC_PLAYER]);
+		output_table[11].value = (sd->subsize[SZ_MEDIUM] + sd->subsize[SZ_ALL]);
+
+		for (i = 0; output_table[i].format != NULL; i++) {
+			sprintf(output, output_table[i].format, output_table[i].value);
+			clif_displaymessage(fd, output);
+		}
+		return 0;		
+}
+
 /**
 * Clone other player's statuses/parameters using method same like ACMD_FUNC(param), doesn't use stat point
 * Usage: @clonestat <char name/ID>
@@ -9984,6 +10034,107 @@ ACMD_FUNC(adopt)
 
 	if (response < ADOPT_MORE_CHILDREN) // No displaymessage for client-type responses
 		clif_displaymessage(fd, msg_txt(sd, 744 + response - 1));
+	return -1;
+}
+
+/*==========================================
+* Battleground Leader Commands
+*------------------------------------------*/
+ACMD_FUNC(order)
+{
+	nullpo_retr(-1, sd);
+	if (!message || !*message)
+		{
+		clif_displaymessage(fd, "Please, enter a message (usage: @order <message>).");
+		return -1;
+		}
+	
+		if (map[sd->bl.m].flag.battleground)
+		{
+			if (!sd->bmaster_flag)
+			{
+			clif_displaymessage(fd, "This command is reserved for Team Leaders Only.");
+			return -1;
+			}
+		clif_broadcast2(&sd->bl, message, (int)strlen(message) + 1, sd->bmaster_flag->color, 0x190, 20, 0, 0, BG);
+	}
+	else
+	{
+		if (!sd->state.gmaster_flag)
+		{
+			clif_displaymessage(fd, "This command is reserved for Guild Leaders Only.");
+			return -1;
+		}
+		clif_broadcast2(&sd->bl, message, (int)strlen(message) + 1, 0xFF0000, 0x190, 20, 0, 0, GUILD);
+	}
+
+	return 0;
+}
+
+ACMD_FUNC(leader)
+{
+	struct map_session_data *pl_sd;
+	nullpo_retr(-1, sd);
+	if (!sd->bmaster_flag)
+		clif_displaymessage(fd, "This command is reserved for Team Leaders Only.");
+	else if (sd->ud.skilltimer != INVALID_TIMER)
+		clif_displaymessage(fd, "Command not allow while casting a skill.");
+	else if (!message || !*message)
+		clif_displaymessage(fd, "Please, enter the new Leader name (usage: @leader <name>).");
+	else if ((pl_sd = map_nick2sd(atcmd_player_name,true)) == NULL)
+		clif_displaymessage(fd, "Character not found"); // Character not found.
+	else if (sd->bg_id != pl_sd->bg_id)
+		clif_displaymessage(fd, "Destination Player is not in your Team.");
+	else if (sd == pl_sd)
+		clif_displaymessage(fd, "You are already the Team Leader.");
+	else
+	{ // Everytest OK!
+		sprintf(atcmd_output, "Team Leader transfered to [%s]", pl_sd->status.name);
+		clif_broadcast2(&sd->bl, atcmd_output, (int)strlen(atcmd_output) + 1, sd->bmaster_flag->color, 0x190, 20, 0, 0, BG);
+		
+		sd->bmaster_flag->leader_char_id = pl_sd->status.char_id;
+		pl_sd->bmaster_flag = sd->bmaster_flag;
+		sd->bmaster_flag = NULL;
+		
+		clif_name_area(&sd->bl);
+		clif_name_self(&pl_sd->bl);
+		return 0;
+	}
+	return -1;
+}
+
+ACMD_FUNC(reportafk)
+{
+	struct map_session_data *pl_sd;
+	nullpo_retr(-1, sd);
+	if (!sd->bg_id)
+		clif_displaymessage(fd, "This command is reserved for Battleground Only.");
+	else if (!sd->bmaster_flag && battle_config.bg_reportafk_leaderonly)
+		clif_displaymessage(fd, "This command is reserved for Team Leaders Only.");
+	else if (!message || !*message)
+		clif_displaymessage(fd, "Please, enter the character name (usage: @reportafk <name>).");
+	else if ((pl_sd = map_nick2sd(atcmd_player_name,true)) == NULL)
+		clif_displaymessage(fd, "Character not Found"); // Character not found.
+	else if (sd->bg_id != pl_sd->bg_id)
+		clif_displaymessage(fd, "Destination Player is not in your Team.");
+	else if (sd == pl_sd)
+		clif_displaymessage(fd, "You cannot kick yourself.");
+	else if (pl_sd->state.bg_afk == 0)
+		clif_displaymessage(fd, "The player is not AFK on this Battleground.");
+	else
+		{ // Everytest OK!
+		struct battleground_data *bg;
+		if ((bg = bg_team_search(sd->bg_id)) == NULL)
+			return -1;
+		
+		bg_team_leave(pl_sd, 2);
+		clif_displaymessage(pl_sd->fd, "You have been kicked from Battleground because of your AFK status.");
+		pc_setpos(pl_sd, pl_sd->status.save_point.map, pl_sd->status.save_point.x, pl_sd->status.save_point.y, CLR_RESPAWN);
+		
+			sprintf(atcmd_output, "- AFK [%s] Kicked -", pl_sd->status.name);
+		clif_broadcast2(&sd->bl, atcmd_output, (int)strlen(atcmd_output) + 1, bg->color, 0x190, 20, 0, 0, BG);
+		return 0;
+	}
 	return -1;
 }
 
@@ -10284,7 +10435,15 @@ void atcommand_basecommands(void) {
 		ACMD_DEF(adopt),
 		ACMD_DEF(agitstart3),
 		ACMD_DEF(agitend3),
+		ACMD_DEF(resistance),
+		/**
+		 * BG eAmod
+		**/
+		ACMD_DEF(order),
+		ACMD_DEF(leader),
+		ACMD_DEF(reportafk),
 	};
+
 	AtCommandInfo* atcommand;
 	int i;
 

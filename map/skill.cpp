@@ -687,7 +687,8 @@ bool skill_isNotOk(uint16 skill_id, struct map_session_data *sd)
 	 */
 	if( sd->skillitem == skill_id && !sd->skillitem_keep_requirement )
 		return false;
-
+	if (sd->state.only_walk)
+		return 1;
 	skill_nocast = skill_get_nocast(skill_id);
 	// Check skill restrictions [Celest]
 	if( (!map_flag_vs2(m) && skill_nocast&1) ||
@@ -6173,8 +6174,12 @@ int skill_castend_nodamage_id (struct block_list *src, struct block_list *bl, ui
 			int heal = skill_calc_heal(src, bl, skill_id, skill_lv, true);
 			int heal_get_jobexp;
 
-			if (status_isimmune(bl) || (dstmd && (status_get_class(bl) == MOBID_EMPERIUM || status_get_class_(bl) == CLASS_BATTLEFIELD)))
+//			if (status_isimmune(bl) || (dstmd && (status_get_class(bl) == MOBID_EMPERIUM || status_get_class_(bl) == CLASS_BATTLEFIELD)))
+//				heal = 0;
+			if (status_isimmune(bl) || (dstmd && (status_get_class(bl) == MOBID_EMPERIUM || status_get_class_(bl) == CLASS_BATTLEFIELD)))//Mado is immune to heal
 				heal = 0;
+			if (dstmd && mob_is_battleground(dstmd))
+				heal = 1;
 
 			if( tsc && tsc->count ) {
 				if( tsc->data[SC_KAITE] && !status_has_mode(sstatus,MD_STATUS_IMMUNE) ) { //Bounce back heal
@@ -7779,6 +7784,8 @@ int skill_castend_nodamage_id (struct block_list *src, struct block_list *bl, ui
 					sp -= sp * penalty / 100;
 				}
 			}
+			if (dstmd && mob_is_battleground(dstmd))
+				hp = 1;
 			clif_skill_nodamage(src,bl,skill_id,skill_lv,1);
 			if( hp > 0 || (skill_id == AM_POTIONPITCHER && sp <= 0) )
 				clif_skill_nodamage(NULL,bl,AL_HEAL,hp,1);
@@ -13724,7 +13731,8 @@ int skill_unit_onplace_timer(struct skill_unit *unit, struct block_list *bl, uns
 					break;
 #endif
 				if (md && status_get_class_(bl) == CLASS_BATTLEFIELD)
-					break;
+					//break;
+					heal = 1;
 				if( tstatus->hp >= tstatus->max_hp )
 					break;
 				if( status_isimmune(bl) )
@@ -14901,6 +14909,7 @@ bool skill_check_condition_castbegin(struct map_session_data* sd, uint16 skill_i
 				; //Do not consume item.
 			else if( sd->inventory.u.items_inventory[i].expire_time == 0 )
 				pc_delitem(sd,i,1,0,0,LOG_TYPE_CONSUME); // Rental usable items are not consumed until expiration
+			return true;
 		}
 		if(!sd->skillitem_keep_requirement)
 			return true;
@@ -15974,7 +15983,6 @@ bool skill_check_condition_castend(struct map_session_data* sd, uint16 skill_id,
 void skill_consume_requirement(struct map_session_data *sd, uint16 skill_id, uint16 skill_lv, short type)
 {
 	struct skill_condition require;
-
 	nullpo_retv(sd);
 
 	require = skill_get_requirement(sd,skill_id,skill_lv);
@@ -16016,43 +16024,46 @@ void skill_consume_requirement(struct map_session_data *sd, uint16 skill_id, uin
 
 	if( type&2 ) {
 		struct status_change *sc = &sd->sc;
-		int n,i;
+		int n, i;
 
 		if( !sc->count )
 			sc = NULL;
 
-		for( i = 0; i < MAX_SKILL_ITEM_REQUIRE; ++i )
+		for (i = 0; i < MAX_SKILL_ITEM_REQUIRE; ++i)
 		{
-			if( !require.itemid[i] )
+			if (!require.itemid[i])
 				continue;
 
-			if( itemdb_group_item_exists(IG_GEMSTONE, require.itemid[i]) && skill_id != HW_GANBANTEIN && sc && sc->data[SC_SPIRIT] && sc->data[SC_SPIRIT]->val2 == SL_WIZARD )
+
+			if (itemdb_group_item_exists(IG_GEMSTONE, require.itemid[i]) && skill_id != HW_GANBANTEIN && sc && sc->data[SC_SPIRIT] && sc->data[SC_SPIRIT]->val2 == SL_WIZARD)
 				continue; //Gemstones are checked, but not substracted from inventory.
 
-			switch( skill_id ){
-				case SA_SEISMICWEAPON:
-					if( sc && sc->data[SC_UPHEAVAL_OPTION] && rnd()%100 < 50 )
-						continue;
-					break;
-				case SA_FLAMELAUNCHER:
-				case SA_VOLCANO:
-					if( sc && sc->data[SC_TROPIC_OPTION] && rnd()%100 < 50 )
-						continue;
-					break;
-				case SA_FROSTWEAPON:
-				case SA_DELUGE:
-					if( sc && sc->data[SC_CHILLY_AIR_OPTION] && rnd()%100 < 50 )
-						continue;
-					break;
-				case SA_LIGHTNINGLOADER:
-				case SA_VIOLENTGALE:
-					if( sc && sc->data[SC_WILD_STORM_OPTION] && rnd()%100 < 50 )
-						continue;
-					break;
+			switch (skill_id) {
+			case SA_SEISMICWEAPON:
+				if (sc && sc->data[SC_UPHEAVAL_OPTION] && rnd() % 100 < 50)
+					continue;
+				break;
+			case SA_FLAMELAUNCHER:
+			case SA_VOLCANO:
+				if (sc && sc->data[SC_TROPIC_OPTION] && rnd() % 100 < 50)
+					continue;
+				break;
+			case SA_FROSTWEAPON:
+			case SA_DELUGE:
+				if (sc && sc->data[SC_CHILLY_AIR_OPTION] && rnd() % 100 < 50)
+					continue;
+				break;
+			case SA_LIGHTNINGLOADER:
+			case SA_VIOLENTGALE:
+				if (sc && sc->data[SC_WILD_STORM_OPTION] && rnd() % 100 < 50)
+					continue;
+				break;
 			}
-
-			if( (n = pc_search_inventory(sd,require.itemid[i])) >= 0 )
-				pc_delitem(sd,n,require.amount[i],0,1,LOG_TYPE_CONSUME);
+			
+			if (n = pc_search_inventory(sd, require.itemid[i]) >= 0) {
+				if (sd->special_state.no_consumme != 1)
+					pc_delitem(sd, n, require.amount[i], 0, 1, LOG_TYPE_CONSUME);
+			}
 
 			if (skill_id == RL_SLUGSHOT && n > -1) // Slug found - simulate priority and cancel the loop
 				break;

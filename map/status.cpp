@@ -1840,10 +1840,17 @@ int status_damage(struct block_list *src,struct block_list *target,int64 dhp, in
 	//cf SC_REBIRTH, SC_KAIZEL, pc_dead...
 	if(target->type == BL_PC) {
 		TBL_PC *sd = BL_CAST(BL_PC,target);
-		if( sd->bg_id ) {
+//		if( sd->bg_id ) {
+		if (sd->bg_id) {//aca va lo de eamod para rankings y weas asi
 			struct battleground_data *bg;
-			if( (bg = bg_team_search(sd->bg_id)) != NULL && bg->die_event[0] )
+//			if( (bg = bg_team_search(sd->bg_id)) != NULL && bg->die_event[0] )
+			if (map[sd->bl.m].flag.battleground && (bg = bg_team_search(sd->bg_id)) != NULL && bg->die_event[0])
+			{
+				struct map_session_data *ssd = BL_CAST(BL_PC, src);
+				pc_setreg(sd, add_str("@killer_bg_id"), bg_team_get_id(src)); // Killer's Team
+				pc_setreg(sd, add_str("@killer_bg_src"), ssd && ssd->bg_id ? ssd->bl.id : 0);
 				npc_event(sd, bg->die_event, 0);
+			}
 		}
 
 		npc_script_event(sd,NPCE_DIE);
@@ -2177,10 +2184,10 @@ bool status_check_skilluse(struct block_list *src, struct block_list *target, ui
 				return false; // Can't amp out of Wand of Hermode :/ [Skotlex]
 		}
 
-		if (skill_id && // Do not block item-casted skills.
-			(src->type != BL_PC || ((TBL_PC*)src)->skillitem != skill_id)
-		) {	// Skills blocked through status changes...
-			if (!flag && ( // Blocked only from using the skill (stuff like autospell may still go through
+		if (skill_id &&// Do not block item-casted skills.
+			src->type != BL_PC || ((TBL_PC*)src)->skillitem != skill_id)
+		 // Skills blocked through status changes...
+		{	if (!flag && ( // Blocked only from using the skill (stuff like autospell may still go through
 				sc->cant.cast ||
 				(sc->data[SC_BASILICA] && (sc->data[SC_BASILICA]->val4 != src->id || skill_id != HP_BASILICA)) || // Only Basilica caster that can cast, and only Basilica to cancel it
 				(sc->data[SC_MARIONETTE] && skill_id != CG_MARIONETTE) || // Only skill you can use is marionette again to cancel it
@@ -2623,9 +2630,13 @@ void status_calc_misc(struct block_list *bl, struct status_data *status, int lev
 		status->cri = 0;
 
 	if (bl->type&battle_config.enable_perfect_flee) {
-		stat = status->flee2;
-		stat += status->luk + 10; // (every 10 luk = +1 perfect flee)
-		status->flee2 = cap_value(stat, 0, SHRT_MAX);
+		struct map_session_data *sd = BL_CAST(BL_PC, bl);
+		if (((sd->class_&MAPID_BASEMASK) == MAPID_MAGE) || ((sd->class_&MAPID_UPPERMASK) == MAPID_BARDDANCER) | ((sd->class_&MAPID_UPPERMASK) == MAPID_PRIEST))
+		{
+			stat = status->flee2;
+			stat += status->luk + 10; // (every 10 luk = +1 perfect flee)
+			status->flee2 = cap_value(stat, 0, SHRT_MAX);
+		}
 	} else
 		status->flee2 = 0;
 

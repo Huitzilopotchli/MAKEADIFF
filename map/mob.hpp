@@ -189,6 +189,7 @@ struct mob_data {
 		unsigned char steal_flag; //number of steal tries (to prevent steal exploit on mobs with few items) [Lupus]
 		unsigned char attacked_count; //For rude attacked.
 		int provoke_flag; // Celest
+		unsigned inmunity : 1;
 	} state;
 	struct guardian_data* guardian_data;
 	struct s_dmglog {
@@ -205,7 +206,8 @@ struct mob_data {
 	int level;
 	int target_id,attacked_id,norm_attacked_id;
 	int areanpc_id; //Required in OnTouchNPC (to avoid multiple area touchs)
-	unsigned int bg_id; // BattleGround System
+//	unsigned int bg_id; // BattleGround System
+	int bg_id; // BattleGround System
 
 	unsigned int next_walktime,last_thinktime,last_linktime,last_pcneartime,dmgtick;
 	short move_fail_count;
@@ -325,6 +327,8 @@ void mob_heal(struct mob_data *md,unsigned int heal);
 
 #define mob_stop_walking(md, type) unit_stop_walking(&(md)->bl, type)
 #define mob_stop_attack(md) unit_stop_attack(&(md)->bl)
+//#define mob_is_battleground(md) ( map[(md)->bl.m].flag.battleground && ((md)->mob_id == MOBID_BARRICADE2 || ((md)->mob_id >= MOBID_FOOD_STOR && (md)->mob_id <= MOBID_PINK_CRYST)) )
+#define mob_is_battleground(md) (map[(md)->bl.m].flag.battleground && ((md)->mob_id == 1906 || ((md)->mob_id >= 1909 && (md)->mob_id <= 1915) || ((md)->mob_id >= 2105 && (md)->mob_id <= 2107)))
 #define mob_is_samename(md, mid) (strcmp(mob_db((md)->mob_id)->jname, mob_db(mid)->jname) == 0)
 
 void mob_clear_spawninfo();

@@ -496,6 +496,7 @@ enum _sp {
 	SP_STATE_NORECOVER_RACE, SP_CRITICAL_RANGEATK, SP_MAGIC_ADDRACE2, SP_IGNORE_MDEF_RACE2_RATE, // 2079-2082
 	SP_WEAPON_ATK_RATE, SP_WEAPON_MATK_RATE, SP_DROP_ADDRACE, SP_DROP_ADDCLASS, SP_NO_MADO_FUEL, // 2083-2087
 	SP_IGNORE_DEF_CLASS_RATE, SP_REGEN_PERCENT_HP, SP_REGEN_PERCENT_SP, //2088-2091
+	SP_NO_CONSUMME,
 };
 
 enum _look {
@@ -628,7 +629,7 @@ struct map_data {
 	int16 m;
 	int16 xs,ys; // map dimensions (in cells)
 	int16 bxs,bys; // map dimensions (in blocks)
-	int16 bgscore_lion, bgscore_eagle; // Battleground ScoreBoard
+	int16 bgscore_lion, bgscore_eagle, bgscore_top; // Battleground ScoreBoard
 	int npc_num;
 	int users;
 	int users_pvp;
@@ -838,7 +839,7 @@ int map_clearflooritem_timer(int tid, unsigned int tick, int id, intptr_t data);
 int map_removemobs_timer(int tid, unsigned int tick, int id, intptr_t data);
 void map_clearflooritem(struct block_list* bl);
 int map_addflooritem(struct item *item, int amount, int16 m, int16 x, int16 y, int first_charid, int second_charid, int third_charid, int flags, unsigned short mob_id);
-
+int map_addflooritem_area(struct block_list* bl, int m, int x, int y, int nameid, int amount); // [Zephyrus]
 // instances
 int map_addinstancemap(const char *name, unsigned short instance_id);
 int map_delinstancemap(int m);
